@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { ArrowLeft, FileDown, Play, Save } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import type { Project, TocItem, Slide } from "@/lib/types";
 import { PaneProposal } from "./pane-proposal";
 import { PaneToc } from "./pane-toc";
 import { PaneScript } from "./pane-script";
 import { PaneSlide } from "./pane-slide";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 interface FourPaneEditorProps {
   project: Project;
@@ -84,64 +88,73 @@ export function FourPaneEditor({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      {/* top bar */}
-      <header className="flex items-center justify-between px-5 py-2.5 bg-white border-b border-gray-200 shrink-0 shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            title="一覧へ戻る"
-          >
-            ←
-          </button>
-          <div className="w-px h-5 bg-gray-200" />
-          <h1 className="text-base font-semibold text-gray-800 truncate max-w-md">
-            {project.title}
-          </h1>
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              saving
-                ? "bg-amber-100 text-amber-700"
-                : lastSavedAt
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-gray-100 text-gray-400"
-            }`}
-          >
+    <div className="editor-shell flex flex-col h-screen">
+      <header className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0 bg-card/80 backdrop-blur-md z-10">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="sm" onClick={onBack} title="一覧へ戻る">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">一覧</span>
+          </Button>
+          <Separator orientation="vertical" className="h-5 hidden sm:block" />
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground leading-none mb-0.5">
+              RE:FRAME
+            </p>
+            <h1 className="text-sm font-medium text-foreground truncate max-w-[10rem] sm:max-w-md">
+              {project.title}
+            </h1>
+          </div>
+          <Badge variant={saving ? "warning" : lastSavedAt ? "success" : "muted"}>
             {saving
               ? "保存中..."
               : lastSavedAt
               ? `保存済 ${formatSavedAt(lastSavedAt)}`
               : "未保存"}
-          </span>
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
           {saveError && (
-            <span className="text-xs text-red-500 max-w-[200px] truncate" title={saveError}>
+            <span
+              className="text-xs text-destructive max-w-[140px] truncate hidden lg:inline"
+              title={saveError}
+            >
               {saveError}
             </span>
           )}
-          <button className="text-sm px-4 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors opacity-50 cursor-not-allowed" disabled title="フェーズ4で実装予定">
-            リハーサル ▶
-          </button>
-          <button className="text-sm px-4 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors opacity-50 cursor-not-allowed" disabled title="フェーズ4で実装予定">
-            PDF出力
-          </button>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            className="hidden md:inline-flex opacity-50 border-dashed"
+            title="フェーズ3で実装予定"
+          >
+            <Play className="h-3.5 w-3.5" />
+            リハーサル
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            className="hidden md:inline-flex opacity-50 border-dashed"
+            title="フェーズ4で実装予定"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            PDF
+          </Button>
+          <Button
+            size="sm"
             onClick={() => void onSave?.()}
             disabled={saving || !onSave}
-            className="text-sm px-4 py-1.5 border border-indigo-200 bg-indigo-50 rounded-lg text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50"
           >
-            {saving ? "保存中..." : "保存"}
-          </button>
+            <Save className="h-3.5 w-3.5" />
+            {saving ? "保存中" : "保存"}
+          </Button>
         </div>
       </header>
 
-      {/* 4-pane area */}
-      <div className="flex-1 overflow-hidden p-2">
-        <PanelGroup orientation="horizontal" className="h-full rounded-xl overflow-hidden">
-          {/* Pane 1: Proposal */}
-          <Panel defaultSize={22} minSize={15} className="rounded-l-xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="flex-1 overflow-hidden p-2 sm:p-3">
+        <PanelGroup orientation="horizontal" className="h-full">
+          <Panel defaultSize={22} minSize={15} className="rounded-l-lg overflow-hidden">
             <PaneProposal
               proposal={project.proposal}
               projectTitle={project.title}
@@ -152,10 +165,9 @@ export function FourPaneEditor({
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize mx-0.5" />
+          <PanelResizeHandle className="w-px mx-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
 
-          {/* Pane 2: TOC */}
-          <Panel defaultSize={20} minSize={14} className="overflow-hidden border border-gray-200 shadow-sm">
+          <Panel defaultSize={20} minSize={14} className="overflow-hidden">
             <PaneToc
               toc={project.toc}
               selectedTocId={selectedTocId}
@@ -168,10 +180,9 @@ export function FourPaneEditor({
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize mx-0.5" />
+          <PanelResizeHandle className="w-px mx-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
 
-          {/* Pane 3: Script */}
-          <Panel defaultSize={30} minSize={18} className="overflow-hidden border border-gray-200 shadow-sm">
+          <Panel defaultSize={30} minSize={18} className="overflow-hidden">
             <PaneScript
               selectedTocItem={selectedTocItem}
               selectedParaId={selectedParaId}
@@ -182,10 +193,9 @@ export function FourPaneEditor({
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize mx-0.5" />
+          <PanelResizeHandle className="w-px mx-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
 
-          {/* Pane 4: Slide */}
-          <Panel defaultSize={28} minSize={18} className="rounded-r-xl overflow-hidden border border-gray-200 shadow-sm">
+          <Panel defaultSize={28} minSize={18} className="rounded-r-lg overflow-hidden">
             <PaneSlide
               selectedParagraph={selectedParagraph}
               onSlideChange={handleSlideChange}

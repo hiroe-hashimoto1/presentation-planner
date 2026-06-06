@@ -1,6 +1,9 @@
 "use client";
 
 import type { ProposalFields } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NotionBlock, PaneShell } from "@/components/editor/pane-shell";
 
 interface PaneProposalProps {
   proposal: ProposalFields;
@@ -28,45 +31,32 @@ export function PaneProposal({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* pane header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 bg-indigo-50 shrink-0">
-        <div className="w-2 h-2 rounded-full bg-indigo-500" />
-        <span className="text-sm font-semibold text-indigo-700">課題・企画</span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* project title */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-            企画タイトル
-          </label>
-          <input
+    <PaneShell accent="proposal" label="課題・企画">
+      <div className="p-3 sm:p-4 space-y-1">
+        <NotionBlock label="企画タイトル">
+          <Input
             type="text"
             value={projectTitle}
             onChange={(e) => onTitleChange(e.target.value)}
-            className="w-full px-3 py-2 text-base font-semibold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+            className="notion-input text-base font-medium h-auto border-0 shadow-none focus-visible:ring-0"
             placeholder="企画タイトルを入力..."
           />
-        </div>
+        </NotionBlock>
 
-        <div className="border-t border-gray-100" />
+        <div className="h-px bg-border my-3" />
 
         {FIELDS.map(({ key, label, rows }) => (
-          <div key={key}>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              {label}
-            </label>
-            <textarea
+          <NotionBlock key={key} label={label}>
+            <Textarea
               value={proposal[key]}
               onChange={(e) => handleChange(key, e.target.value)}
               rows={rows}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none bg-gray-50 leading-relaxed"
+              className="notion-input min-h-0 border-0 shadow-none focus-visible:ring-0 resize-none leading-relaxed"
               placeholder={`${label}を入力...`}
             />
-          </div>
+          </NotionBlock>
         ))}
       </div>
-    </div>
+    </PaneShell>
   );
 }

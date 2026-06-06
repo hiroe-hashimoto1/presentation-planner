@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { AlertTriangle, Play, Plus, SkipForward, X } from "lucide-react";
 import type { TocItem, Paragraph, Slide } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  AddRowButton,
+  EditorEmpty,
+  PaneShell,
+} from "@/components/editor/pane-shell";
+import { cn } from "@/lib/utils";
 
 interface PaneScriptProps {
   selectedTocItem: TocItem | null;
@@ -92,7 +103,6 @@ export function PaneScript({
     );
     onTocItemChange({ ...selectedTocItem, paragraphs: updatedParagraphs });
 
-    // auto-advance to next paragraph
     const next = selectedTocItem.paragraphs[paraIndex + 1];
     if (next) {
       onSelectParagraph(next.id);
@@ -156,135 +166,127 @@ export function PaneScript({
     }
   };
 
+  const timerActions = selectedTocItem ? (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+        {formatTime(totalElapsed)}
+      </span>
+      {timer.running ? (
+        <Button size="sm" className="h-7 text-xs" onClick={saveTimerToParaAndNext}>
+          <SkipForward className="h-3 w-3" />
+          次へ
+        </Button>
+      ) : (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => {
+            const firstPara = selectedTocItem.paragraphs[0];
+            if (firstPara) {
+              onSelectParagraph(firstPara.id);
+              startTimer(firstPara.id);
+            }
+          }}
+        >
+          <Play className="h-3 w-3" />
+          計測
+        </Button>
+      )}
+    </div>
+  ) : null;
+
   if (!selectedTocItem) {
     return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 bg-emerald-50 shrink-0">
-          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-semibold text-emerald-700">説明原稿</span>
-        </div>
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-          目次項目を選択してください
-        </div>
-      </div>
+      <PaneShell accent="script" label="説明原稿">
+        <EditorEmpty>左の目次から項目を選択してください</EditorEmpty>
+      </PaneShell>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* pane header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-emerald-50 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-          <span className="text-sm font-semibold text-emerald-700 truncate">
-            {selectedTocItem.title}
-          </span>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-xs text-gray-500">
-            合計 {formatTime(totalElapsed)}
-          </span>
-          {timer.running ? (
-            <button
-              onClick={saveTimerToParaAndNext}
-              className="text-xs px-3 py-1 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors"
-            >
-              次へ ▶
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                const firstPara = selectedTocItem.paragraphs[0];
-                if (firstPara) {
-                  onSelectParagraph(firstPara.id);
-                  startTimer(firstPara.id);
-                }
-              }}
-              className="text-xs px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full hover:bg-emerald-200 transition-colors"
-            >
-              ▶ 計測開始
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* paragraphs */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+    <PaneShell
+      accent="script"
+      label={selectedTocItem.title}
+      actions={timerActions}
+    >
+      <div className="p-2 sm:p-3 space-y-2">
         {selectedTocItem.paragraphs.map((para, idx) => {
           const isSelected = selectedParaId === para.id;
           const isTimerActive = timer.running && timer.paraId === para.id;
           const elapsed = isTimerActive ? timer.elapsed : para.elapsedSeconds;
-          const isOverTarget = para.targetSeconds > 0 && elapsed > para.targetSeconds;
+          const isOverTarget =
+            para.targetSeconds > 0 && elapsed > para.targetSeconds;
 
           return (
             <div
               key={para.id}
-              className={`group rounded-xl border transition-all ${
+              className={cn(
+                "group rounded-lg border transition-all",
                 isSelected
-                  ? "border-emerald-400 shadow-sm"
-                  : "border-gray-100 hover:border-gray-200"
-              } ${isTimerActive ? "ring-2 ring-emerald-300" : ""}`}
+                  ? "border-emerald-500/40 bg-accent/20"
+                  : "border-border hover:border-border/80 hover:bg-accent/10",
+                isTimerActive && "ring-1 ring-emerald-400/50"
+              )}
               onClick={() => onSelectParagraph(para.id)}
             >
-              {/* paragraph header */}
-              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                <span className="text-xs font-bold text-gray-400">
-                  段落 {idx + 1}
+              <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  {String(idx + 1).padStart(2, "0")}
                 </span>
 
-                {/* timer display */}
-                <div
-                  className={`flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full ${
-                    isTimerActive
-                      ? isOverTarget
-                        ? "bg-red-100 text-red-600"
-                        : "bg-emerald-100 text-emerald-700"
-                      : para.elapsedSeconds > 0
-                      ? isOverTarget
-                        ? "bg-red-50 text-red-400"
-                        : "bg-gray-100 text-gray-500"
-                      : "bg-gray-50 text-gray-400"
-                  }`}
+                <Badge
+                  variant={
+                    isTimerActive && isOverTarget
+                      ? "destructive"
+                      : isTimerActive
+                      ? "success"
+                      : isOverTarget
+                      ? "destructive"
+                      : "muted"
+                  }
+                  className="font-mono tabular-nums gap-1"
                 >
                   {isTimerActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   )}
                   {formatTime(elapsed)}
                   {para.targetSeconds > 0 && (
-                    <span className="text-gray-400">/ {formatTime(para.targetSeconds)}</span>
+                    <span className="opacity-50">
+                      / {formatTime(para.targetSeconds)}
+                    </span>
                   )}
-                </div>
+                </Badge>
 
-                <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {/* target time input */}
-                  <input
+                <div className="ml-auto flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <Input
                     type="number"
                     value={para.targetSeconds}
                     onChange={(e) =>
                       updateTargetSeconds(para.id, Number(e.target.value))
                     }
                     onClick={(e) => e.stopPropagation()}
-                    className="w-14 text-xs text-center border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                    className="w-12 h-6 text-[10px] text-center px-1 border-border bg-secondary"
                     title="目標秒数"
                     min={0}
                   />
-                  <span className="text-xs text-gray-400">秒</span>
+                  <span className="text-[10px] text-muted-foreground">秒</span>
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       removeParagraph(para.id);
                     }}
-                    className="text-gray-300 hover:text-red-500 text-xs ml-1"
+                    className="p-0.5 rounded text-muted-foreground hover:text-destructive"
                     title="段落を削除"
                   >
-                    ✕
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* textarea */}
-              <div className="px-3 pb-2.5">
-                <textarea
+              <div className="px-2 pb-2">
+                <Textarea
                   ref={(el) => {
                     textareaRefs.current[para.id] = el;
                   }}
@@ -293,29 +295,26 @@ export function PaneScript({
                   onKeyDown={(e) => handleKeyDown(e, para.id)}
                   onClick={(e) => e.stopPropagation()}
                   rows={3}
-                  className="w-full text-sm resize-none focus:outline-none text-gray-700 leading-relaxed placeholder-gray-300 bg-transparent"
+                  className="notion-input min-h-0 border-0 shadow-none focus-visible:ring-0 resize-none leading-relaxed"
                   placeholder="話す内容を入力... (Enterで新段落、Shift+Enterで改行)"
                 />
               </div>
 
               {isOverTarget && (
-                <div className="px-3 pb-2 text-xs text-red-500 font-medium">
-                  ⚠ 目標時間を超過しています
+                <div className="px-3 pb-2 flex items-center gap-1 text-xs text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  目標時間を超過
                 </div>
               )}
             </div>
           );
         })}
 
-        {/* add paragraph */}
-        <button
-          onClick={() => addParagraph()}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg border border-dashed border-gray-200 hover:border-emerald-300 transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          <span>段落を追加</span>
-        </button>
+        <AddRowButton onClick={() => addParagraph()}>
+          <Plus className="h-4 w-4" />
+          段落を追加
+        </AddRowButton>
       </div>
-    </div>
+    </PaneShell>
   );
 }

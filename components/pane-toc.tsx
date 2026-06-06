@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, X } from "lucide-react";
 import type { TocItem, Paragraph, Slide } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { AddRowButton, PaneShell } from "@/components/editor/pane-shell";
+import { cn } from "@/lib/utils";
 
 interface PaneTocProps {
   toc: TocItem[];
@@ -59,36 +64,35 @@ export function PaneToc({
   const totalParagraphs = toc.reduce((sum, t) => sum + t.paragraphs.length, 0);
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* pane header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-violet-50 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-violet-500" />
-          <span className="text-sm font-semibold text-violet-700">目次</span>
-        </div>
-        <span className="text-xs text-gray-400">{totalParagraphs}段落</span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+    <PaneShell
+      accent="toc"
+      label="目次"
+      meta={
+        <Badge variant="muted" className="text-[10px] py-0">
+          {totalParagraphs}
+        </Badge>
+      }
+    >
+      <div className="p-2 sm:p-3 space-y-1">
         {toc.map((item, index) => (
           <div key={item.id}>
-            {/* toc item */}
             <div
-              className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+              className={cn(
+                "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
                 selectedTocId === item.id
-                  ? "bg-violet-100 border border-violet-300"
-                  : "hover:bg-gray-50 border border-transparent"
-              }`}
+                  ? "bg-accent text-accent-foreground"
+                  : "hover:bg-accent/40"
+              )}
               onClick={() => onSelectToc(item.id)}
             >
-              <span className="text-xs font-bold text-gray-400 w-5 shrink-0">
-                {index + 1}
+              <span className="text-[10px] font-mono text-muted-foreground w-4 shrink-0 tabular-nums">
+                {String(index + 1).padStart(2, "0")}
               </span>
 
               {editingTocId === item.id ? (
-                <input
+                <Input
                   autoFocus
-                  className="flex-1 text-sm font-medium bg-white border border-violet-300 rounded px-2 py-0.5 focus:outline-none"
+                  className="flex-1 h-7 text-sm border-0 bg-secondary shadow-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={item.title}
                   onChange={(e) => updateTocTitle(item.id, e.target.value)}
                   onBlur={() => setEditingTocId(null)}
@@ -97,7 +101,7 @@ export function PaneToc({
                 />
               ) : (
                 <span
-                  className="flex-1 text-sm font-medium text-gray-800 truncate"
+                  className="flex-1 text-sm truncate"
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEditingTocId(item.id);
@@ -107,42 +111,46 @@ export function PaneToc({
                 </span>
               )}
 
-              <span className="text-xs text-gray-400 shrink-0">
+              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                 {item.paragraphs.length}
               </span>
               <button
-                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity shrink-0 text-xs"
+                type="button"
+                className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeTocItem(item.id);
                 }}
                 title="削除"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {/* paragraphs under this toc */}
             {selectedTocId === item.id && (
-              <div className="ml-7 mt-1 space-y-1">
+              <div className="ml-6 mt-0.5 space-y-0.5 border-l border-border pl-2">
                 {item.paragraphs.map((para, pIdx) => (
                   <div
                     key={para.id}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-xs transition-colors ${
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs transition-colors",
                       selectedParaId === para.id
-                        ? "bg-violet-200 text-violet-900"
-                        : "text-gray-600 hover:bg-violet-50"
-                    }`}
+                        ? "bg-violet-500/15 text-violet-200"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                    )}
                     onClick={() => onSelectParagraph(item.id, para.id)}
                   >
-                    <span className="font-mono text-gray-400">{pIdx + 1}</span>
+                    <span className="font-mono opacity-60 tabular-nums">
+                      {pIdx + 1}
+                    </span>
                     <span className="truncate">
                       {para.content
-                        ? para.content.slice(0, 30) + (para.content.length > 30 ? "…" : "")
+                        ? para.content.slice(0, 28) +
+                          (para.content.length > 28 ? "…" : "")
                         : "（未入力）"}
                     </span>
                     {para.targetSeconds > 0 && (
-                      <span className="ml-auto shrink-0 text-gray-400">
+                      <span className="ml-auto shrink-0 font-mono opacity-60">
                         {para.targetSeconds}s
                       </span>
                     )}
@@ -153,15 +161,11 @@ export function PaneToc({
           </div>
         ))}
 
-        {/* add toc item */}
-        <button
-          onClick={addTocItem}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg border border-dashed border-gray-200 hover:border-violet-300 transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          <span>目次項目を追加</span>
-        </button>
+        <AddRowButton onClick={addTocItem}>
+          <Plus className="h-4 w-4" />
+          目次項目を追加
+        </AddRowButton>
       </div>
-    </div>
+    </PaneShell>
   );
 }
