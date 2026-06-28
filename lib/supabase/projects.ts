@@ -1,4 +1,9 @@
 import type { Project, ProposalFields, TocItem } from "@/lib/types";
+import { deleteProjectImages } from "./storage";
+import {
+  ProjectConflictError,
+  sanitizeProjectForSave,
+} from "./project-utils";
 import { getSupabaseClient } from "./client";
 
 interface ProjectRow {
@@ -22,7 +27,10 @@ function rowToProject(row: ProjectRow): Project {
   };
 }
 
-function projectToRow(project: Project, userId: string): Omit<ProjectRow, "created_at"> {
+function projectToRow(
+  project: Project,
+  userId: string
+): Omit<ProjectRow, "created_at"> {
   return {
     id: project.id,
     user_id: userId,
@@ -45,14 +53,32 @@ export async function fetchProjects(userId: string): Promise<Project[]> {
   return (data as ProjectRow[]).map(rowToProject);
 }
 
+export async function fetchProject(
+  projectId: string,
+  userId: string
+): Promise<Project | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return rowToProject(data as ProjectRow);
+}
+
 export async function insertProject(
   project: Project,
   userId: string
 ): Promise<Project> {
   const supabase = getSupabaseClient();
   const now = new Date().toISOString();
+  const sanitized = sanitizeProjectForSave(project);
   const row = {
-    ...projectToRow(project, userId),
+    ...projectToRow(sanitized, userId),
     created_at: now,
     updated_at: now,
   };
@@ -69,18 +95,26 @@ export async function insertProject(
 
 export async function updateProject(
   project: Project,
-  userId: string
+  userId: string,
+  options?: { force?: boolean }
 ): Promise<Project> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
+  const sanitized = sanitizeProjectForSave(project);
+
+  let query = supabase
     .from("projects")
-    .update(projectToRow(project, userId))
+    .update(projectToRow(sanitized, userId))
     .eq("id", project.id)
-    .eq("user_id", userId)
-    .select()
-    .single();
+    .eq("user_id", userId);
+
+  if (!options?.force) {
+    query = query.eq("updated_at", project.updatedAt);
+  }
+
+  const { data, error } = await query.select().maybeSingle();
 
   if (error) throw error;
+  if (!data) throw new ProjectConflictError();
   return rowToProject(data as ProjectRow);
 }
 
@@ -89,6 +123,13 @@ export async function deleteProject(
   userId: string
 ): Promise<void> {
   const supabase = getSupabaseClient();
+
+  try {
+    await deleteProjectImages(userId, projectId);
+  } catch {
+    // Storage 削除失敗はプロジェクト削除を止めない
+  }
+
   const { error } = await supabase
     .from("projects")
     .delete()
@@ -97,3 +138,5 @@ export async function deleteProject(
 
   if (error) throw error;
 }
+
+export { ProjectConflictError } from "./project-utils";

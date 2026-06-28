@@ -14,8 +14,8 @@ export interface Slide {
   bulletPoints: string[];
   columnLeft: string;
   columnRight: string;
-  imageUrl?: string;
-  imageFile?: string; // base64
+  imageUrl?: string; // 外部 URL または Storage パス
+  imageFile?: string; // クライアント一時プレビュー用（DB には保存しない）
 }
 
 export interface Paragraph {

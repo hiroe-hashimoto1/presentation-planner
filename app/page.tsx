@@ -5,13 +5,16 @@ import type { Project } from "@/lib/types";
 import { createNewProject } from "@/lib/create-project";
 import {
   deleteProject,
+  fetchProject,
   fetchProjects,
   insertProject,
+  ProjectConflictError,
   updateProject,
 } from "@/lib/supabase/projects";
 import { useAuth } from "@/components/auth-provider";
 import { AuthScreen, SupabaseSetupScreen } from "@/components/auth-screen";
 import { FourPaneEditor } from "@/components/four-pane-editor";
+import { ConflictDialog } from "@/components/conflict-dialog";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("ja-JP", {
@@ -30,7 +33,10 @@ export default function HomePage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [conflictOpen, setConflictOpen] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uploadInProgress = useRef(false);
+  const pendingSaveProject = useRef<Project | null>(null);
 
   const loadProjects = useCallback(async () => {
     if (!user) return;
@@ -52,12 +58,15 @@ export default function HomePage() {
   }, [user, loadProjects]);
 
   const persistProject = useCallback(
-    async (project: Project): Promise<Project | null> => {
+    async (
+      project: Project,
+      options?: { force?: boolean }
+    ): Promise<Project | null> => {
       if (!user) return null;
       setSaving(true);
       setSaveError(null);
       try {
-        const saved = await updateProject(project, user.id);
+        const saved = await updateProject(project, user.id, options);
         setProjects((prev) => {
           const idx = prev.findIndex((p) => p.id === saved.id);
           if (idx >= 0) {
@@ -67,10 +76,20 @@ export default function HomePage() {
           }
           return [saved, ...prev];
         });
+        setEditingProject((prev) =>
+          prev?.id === saved.id ? saved : prev
+        );
         setLastSavedAt(new Date());
+        pendingSaveProject.current = null;
         return saved;
       } catch (e) {
+        if (e instanceof ProjectConflictError) {
+          pendingSaveProject.current = project;
+          setConflictOpen(true);
+          return null;
+        }
         setSaveError(e instanceof Error ? e.message : "保存に失敗しました");
+        pendingSaveProject.current = project;
         return null;
       } finally {
         setSaving(false);
@@ -81,13 +100,60 @@ export default function HomePage() {
 
   const scheduleAutoSave = useCallback(
     (project: Project) => {
+      if (uploadInProgress.current) return;
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
       autoSaveTimer.current = setTimeout(() => {
-        void persistProject(project);
+        if (!uploadInProgress.current) {
+          void persistProject(project);
+        }
       }, 1500);
     },
     [persistProject]
   );
+
+  const handleUploadStateChange = useCallback(
+    (uploading: boolean) => {
+      uploadInProgress.current = uploading;
+      if (!uploading && editingProject) {
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        void persistProject(editingProject);
+      }
+    },
+    [editingProject, persistProject]
+  );
+
+  const handleConflictOverwrite = useCallback(async () => {
+    setConflictOpen(false);
+    const project = pendingSaveProject.current ?? editingProject;
+    if (!project) return;
+    const saved = await persistProject(project, { force: true });
+    if (saved) setEditingProject(saved);
+  }, [editingProject, persistProject]);
+
+  const handleConflictReload = useCallback(async () => {
+    setConflictOpen(false);
+    if (!user || !editingProject) return;
+    try {
+      const fresh = await fetchProject(editingProject.id, user.id);
+      if (fresh) {
+        setEditingProject(fresh);
+        setLastSavedAt(new Date(fresh.updatedAt));
+        setSaveError(null);
+        pendingSaveProject.current = null;
+      }
+    } catch (e) {
+      setSaveError(
+        e instanceof Error ? e.message : "最新データの読み込みに失敗しました"
+      );
+    }
+  }, [user, editingProject]);
+
+  const handleRetrySave = useCallback(async () => {
+    const project = pendingSaveProject.current ?? editingProject;
+    if (!project) return;
+    const saved = await persistProject(project);
+    if (saved) setEditingProject(saved);
+  }, [editingProject, persistProject]);
 
   useEffect(() => {
     return () => {
@@ -113,26 +179,38 @@ export default function HomePage() {
 
   if (editingProject) {
     return (
-      <FourPaneEditor
-        project={editingProject}
-        onProjectChange={(updated) => {
-          setEditingProject(updated);
-          scheduleAutoSave(updated);
-        }}
-        onSave={async () => {
-          const saved = await persistProject(editingProject);
-          if (saved) setEditingProject(saved);
-        }}
-        saving={saving}
-        saveError={saveError}
-        lastSavedAt={lastSavedAt}
-        onBack={() => {
-          if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-          setEditingProject(null);
-          setSaveError(null);
-          void loadProjects();
-        }}
-      />
+      <>
+        <FourPaneEditor
+          project={editingProject}
+          userId={user.id}
+          onProjectChange={(updated) => {
+            setEditingProject(updated);
+            scheduleAutoSave(updated);
+          }}
+          onSave={async () => {
+            const saved = await persistProject(editingProject);
+            if (saved) setEditingProject(saved);
+          }}
+          onRetrySave={handleRetrySave}
+          saving={saving}
+          saveError={saveError}
+          lastSavedAt={lastSavedAt}
+          onUploadStateChange={handleUploadStateChange}
+          onBack={() => {
+            if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+            setEditingProject(null);
+            setSaveError(null);
+            setConflictOpen(false);
+            pendingSaveProject.current = null;
+            void loadProjects();
+          }}
+        />
+        <ConflictDialog
+          open={conflictOpen}
+          onOverwrite={() => void handleConflictOverwrite()}
+          onReload={() => void handleConflictReload()}
+        />
+      </>
     );
   }
 

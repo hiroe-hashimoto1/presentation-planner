@@ -20,7 +20,7 @@ npm run dev
 
 1. [Supabase](https://supabase.com) でプロジェクトを作成
 2. **Project Settings → API** から URL と `anon` key を取得
-3. **SQL Editor** で `supabase/schema.sql` を実行
+3. **SQL Editor** で `supabase/schema.sql` を実行（`projects` テーブル + Storage バケット `project-images`）
 4. **Authentication → Providers** で Email を有効化  
    - 個人利用のみなら **Confirm email** をオフにするとすぐログインできます
 5. **Authentication → URL Configuration** で本番 URL を登録（Vercel デプロイ後）
@@ -86,6 +86,6 @@ npm run deploy:surge
 | フェーズ | 内容 | 状態 |
 |---------|------|------|
 | 1 | 認証・DB永続化 | 実装済 |
-| 2 | スライドテンプレート・画像 | 未 |
+| 2 | スライドテンプレート・画像（Storage 永続化） | 実装済 |
 | 3 | タイマー・リハーサル | UI一部のみ |
 | 4 | PDF / PowerPoint 出力 | 未 |

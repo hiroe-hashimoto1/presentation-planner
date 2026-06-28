@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ArrowLeft, FileDown, Play, Save } from "lucide-react";
+import { ArrowLeft, FileDown, Play, RefreshCw, Save } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import type { Project, TocItem, Slide } from "@/lib/types";
 import { PaneProposal } from "./pane-proposal";
@@ -14,12 +14,15 @@ import { Separator } from "@/components/ui/separator";
 
 interface FourPaneEditorProps {
   project: Project;
+  userId: string;
   onProjectChange: (project: Project) => void;
   onBack: () => void;
   onSave?: () => void | Promise<void>;
+  onRetrySave?: () => void | Promise<void>;
   saving?: boolean;
   saveError?: string | null;
   lastSavedAt?: Date | null;
+  onUploadStateChange?: (uploading: boolean) => void;
 }
 
 function formatSavedAt(date: Date) {
@@ -32,12 +35,15 @@ function formatSavedAt(date: Date) {
 
 export function FourPaneEditor({
   project,
+  userId,
   onProjectChange,
   onBack,
   onSave,
+  onRetrySave,
   saving = false,
   saveError = null,
   lastSavedAt = null,
+  onUploadStateChange,
 }: FourPaneEditorProps) {
   const [selectedTocId, setSelectedTocId] = useState<string | null>(
     project.toc[0]?.id ?? null
@@ -114,12 +120,26 @@ export function FourPaneEditor({
         </div>
         <div className="flex items-center gap-2">
           {saveError && (
-            <span
-              className="text-xs text-destructive max-w-[140px] truncate hidden lg:inline"
-              title={saveError}
-            >
-              {saveError}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="text-xs text-destructive max-w-[140px] truncate hidden lg:inline"
+                title={saveError}
+              >
+                {saveError}
+              </span>
+              {onRetrySave && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => void onRetrySave()}
+                  disabled={saving}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  再試行
+                </Button>
+              )}
+            </div>
           )}
           <Button
             variant="outline"
@@ -197,8 +217,11 @@ export function FourPaneEditor({
 
           <Panel defaultSize={28} minSize={18} className="rounded-r-lg overflow-hidden">
             <PaneSlide
+              projectId={project.id}
+              userId={userId}
               selectedParagraph={selectedParagraph}
               onSlideChange={handleSlideChange}
+              onUploadStateChange={onUploadStateChange}
             />
           </Panel>
         </PanelGroup>

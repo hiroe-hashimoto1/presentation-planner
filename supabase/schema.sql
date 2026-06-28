@@ -31,3 +31,42 @@ create policy "projects_update_own"
 create policy "projects_delete_own"
   on public.projects for delete
   using (auth.uid() = user_id);
+
+-- Storage: project-images バケット（非公開 + RLS）
+-- パス形式: {user_id}/{project_id}/{slide_id}/{uuid}.ext
+
+insert into storage.buckets (id, name, public)
+values ('project-images', 'project-images', false)
+on conflict (id) do update set public = false;
+
+create policy "project_images_select_own"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'project-images'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+
+create policy "project_images_insert_own"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'project-images'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+
+create policy "project_images_update_own"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'project-images'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+
+create policy "project_images_delete_own"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'project-images'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
