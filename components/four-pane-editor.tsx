@@ -4,10 +4,12 @@ import { useState, useCallback } from "react";
 import { ArrowLeft, FileDown, Play, RefreshCw, Save } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import type { Project, TocItem, Slide } from "@/lib/types";
+import { resetAllElapsed } from "@/lib/rehearsal";
 import { PaneProposal } from "./pane-proposal";
 import { PaneToc } from "./pane-toc";
 import { PaneScript } from "./pane-script";
 import { PaneSlide } from "./pane-slide";
+import { RehearsalOverlay } from "./rehearsal-overlay";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -19,6 +21,8 @@ interface FourPaneEditorProps {
   onBack: () => void;
   onSave?: () => void | Promise<void>;
   onRetrySave?: () => void | Promise<void>;
+  onPersistNow?: (project: Project) => Promise<void>;
+  onRehearsalActiveChange?: (active: boolean) => void;
   saving?: boolean;
   saveError?: string | null;
   lastSavedAt?: Date | null;
@@ -40,6 +44,8 @@ export function FourPaneEditor({
   onBack,
   onSave,
   onRetrySave,
+  onPersistNow,
+  onRehearsalActiveChange,
   saving = false,
   saveError = null,
   lastSavedAt = null,
@@ -51,6 +57,8 @@ export function FourPaneEditor({
   const [selectedParaId, setSelectedParaId] = useState<string | null>(
     project.toc[0]?.paragraphs[0]?.id ?? null
   );
+  const [rehearsalActive, setRehearsalActive] = useState(false);
+  const [startingRehearsal, setStartingRehearsal] = useState(false);
 
   const selectedTocItem = project.toc.find((t) => t.id === selectedTocId) ?? null;
   const selectedParagraph =
@@ -73,10 +81,12 @@ export function FourPaneEditor({
   );
 
   const handleTocChange = (toc: TocItem[]) => {
+    if (rehearsalActive) return;
     onProjectChange({ ...project, toc });
   };
 
   const handleTocItemChange = (updated: TocItem) => {
+    if (rehearsalActive) return;
     onProjectChange({
       ...project,
       toc: project.toc.map((t) => (t.id === updated.id ? updated : t)),
@@ -84,7 +94,7 @@ export function FourPaneEditor({
   };
 
   const handleSlideChange = (slide: Slide) => {
-    if (!selectedTocItem || !selectedParaId) return;
+    if (rehearsalActive || !selectedTocItem || !selectedParaId) return;
     handleTocItemChange({
       ...selectedTocItem,
       paragraphs: selectedTocItem.paragraphs.map((p) =>
@@ -93,11 +103,50 @@ export function FourPaneEditor({
     });
   };
 
+  const handleStartRehearsal = useCallback(async () => {
+    if (!onPersistNow || rehearsalActive || startingRehearsal) return;
+    const flat = project.toc.flatMap((t) => t.paragraphs);
+    if (flat.length === 0) return;
+
+    setStartingRehearsal(true);
+    try {
+      const reset = resetAllElapsed(project);
+      onProjectChange(reset);
+      await onPersistNow(reset);
+      setRehearsalActive(true);
+      onRehearsalActiveChange?.(true);
+    } finally {
+      setStartingRehearsal(false);
+    }
+  }, [onPersistNow, rehearsalActive, startingRehearsal, project, onProjectChange]);
+
+  const handleRehearsalPersist = useCallback(
+    async (updated: Project) => {
+      if (onPersistNow) {
+        await onPersistNow(updated);
+      }
+    },
+    [onPersistNow]
+  );
+
+  const handleRehearsalEnd = useCallback(() => {
+    setRehearsalActive(false);
+    onRehearsalActiveChange?.(false);
+  }, [onRehearsalActiveChange]);
+
+  const readOnly = rehearsalActive;
+
   return (
     <div className="editor-shell flex flex-col h-screen">
       <header className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0 bg-card/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="sm" onClick={onBack} title="一覧へ戻る">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            title="一覧へ戻る"
+            disabled={rehearsalActive}
+          >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">一覧</span>
           </Button>
@@ -119,7 +168,7 @@ export function FourPaneEditor({
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {saveError && (
+          {saveError && !rehearsalActive && (
             <div className="flex items-center gap-1.5">
               <span
                 className="text-xs text-destructive max-w-[140px] truncate hidden lg:inline"
@@ -144,12 +193,12 @@ export function FourPaneEditor({
           <Button
             variant="outline"
             size="sm"
-            disabled
-            className="hidden md:inline-flex opacity-50 border-dashed"
-            title="フェーズ3で実装予定"
+            className="hidden md:inline-flex"
+            onClick={() => void handleStartRehearsal()}
+            disabled={rehearsalActive || startingRehearsal || saving}
           >
             <Play className="h-3.5 w-3.5" />
-            リハーサル
+            {startingRehearsal ? "準備中…" : "リハーサル"}
           </Button>
           <Button
             variant="outline"
@@ -164,7 +213,7 @@ export function FourPaneEditor({
           <Button
             size="sm"
             onClick={() => void onSave?.()}
-            disabled={saving || !onSave}
+            disabled={saving || !onSave || rehearsalActive}
           >
             <Save className="h-3.5 w-3.5" />
             {saving ? "保存中" : "保存"}
@@ -179,9 +228,12 @@ export function FourPaneEditor({
               proposal={project.proposal}
               projectTitle={project.title}
               onProposalChange={(proposal) =>
-                onProjectChange({ ...project, proposal })
+                !readOnly && onProjectChange({ ...project, proposal })
               }
-              onTitleChange={(title) => onProjectChange({ ...project, title })}
+              onTitleChange={(title) =>
+                !readOnly && onProjectChange({ ...project, title })
+              }
+              readOnly={readOnly}
             />
           </Panel>
 
@@ -197,6 +249,7 @@ export function FourPaneEditor({
                 handleSelectParagraph(tocId, paraId)
               }
               onTocChange={handleTocChange}
+              readOnly={readOnly}
             />
           </Panel>
 
@@ -204,12 +257,14 @@ export function FourPaneEditor({
 
           <Panel defaultSize={30} minSize={18} className="overflow-hidden">
             <PaneScript
+              projectToc={project.toc}
               selectedTocItem={selectedTocItem}
               selectedParaId={selectedParaId}
               onSelectParagraph={(paraId) =>
                 handleSelectParagraph(null, paraId)
               }
               onTocItemChange={handleTocItemChange}
+              readOnly={readOnly}
             />
           </Panel>
 
@@ -222,10 +277,20 @@ export function FourPaneEditor({
               selectedParagraph={selectedParagraph}
               onSlideChange={handleSlideChange}
               onUploadStateChange={onUploadStateChange}
+              readOnly={readOnly}
             />
           </Panel>
         </PanelGroup>
       </div>
+
+      {rehearsalActive && (
+        <RehearsalOverlay
+          project={project}
+          onProjectChange={onProjectChange}
+          onPersistNow={handleRehearsalPersist}
+          onEnd={handleRehearsalEnd}
+        />
+      )}
     </div>
   );
 }

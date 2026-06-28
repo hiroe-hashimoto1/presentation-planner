@@ -15,6 +15,7 @@ import { useAuth } from "@/components/auth-provider";
 import { AuthScreen, SupabaseSetupScreen } from "@/components/auth-screen";
 import { FourPaneEditor } from "@/components/four-pane-editor";
 import { ConflictDialog } from "@/components/conflict-dialog";
+import { formatTimeShort, getProjectTiming } from "@/lib/rehearsal";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("ja-JP", {
@@ -40,6 +41,7 @@ export default function HomePage() {
   const conflictPaused = useRef(false);
   const pendingSaveProject = useRef<Project | null>(null);
   const editingProjectRef = useRef<Project | null>(null);
+  const rehearsalActiveRef = useRef(false);
 
   useEffect(() => {
     editingProjectRef.current = editingProject;
@@ -135,9 +137,24 @@ export default function HomePage() {
     await persistProject(latest);
   }, [persistProject]);
 
+  const persistProjectNow = useCallback(
+    async (project: Project): Promise<void> => {
+      clearAutoSaveTimer();
+      setEditingProject(project);
+      editingProjectRef.current = project;
+      await persistProject(project);
+    },
+    [clearAutoSaveTimer, persistProject]
+  );
+
   const scheduleAutoSave = useCallback(
     (_project: Project) => {
-      if (uploadInProgress.current || conflictPaused.current) return;
+      if (
+        uploadInProgress.current ||
+        conflictPaused.current ||
+        rehearsalActiveRef.current
+      )
+        return;
       clearAutoSaveTimer();
       autoSaveTimer.current = setTimeout(() => {
         void flushAutoSave();
@@ -233,6 +250,11 @@ export default function HomePage() {
             if (saved) setEditingProject(saved);
           }}
           onRetrySave={handleRetrySave}
+          onPersistNow={persistProjectNow}
+          onRehearsalActiveChange={(active) => {
+            rehearsalActiveRef.current = active;
+            if (active) clearAutoSaveTimer();
+          }}
           saving={saving}
           saveError={saveError}
           lastSavedAt={lastSavedAt}
@@ -337,14 +359,8 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {projects.map((project) => {
-              const totalParagraphs = project.toc.reduce(
-                (sum, t) => sum + t.paragraphs.length,
-                0
-              );
-              const totalSeconds = project.toc
-                .flatMap((t) => t.paragraphs)
-                .reduce((sum, p) => sum + p.targetSeconds, 0);
-              const totalMin = Math.floor(totalSeconds / 60);
+              const timing = getProjectTiming(project.toc);
+              const totalParagraphs = timing.paragraphCount;
 
               return (
                 <div
@@ -381,7 +397,12 @@ export default function HomePage() {
                     <div className="flex items-center gap-4 mt-4 text-xs text-gray-400">
                       <span>目次 {project.toc.length}項目</span>
                       <span>段落 {totalParagraphs}個</span>
-                      {totalMin > 0 && <span>目標 {totalMin}分</span>}
+                      {timing.totalTarget > 0 && (
+                        <span>目標 {formatTimeShort(timing.totalTarget)}</span>
+                      )}
+                      {timing.totalElapsed > 0 && (
+                        <span>実績 {formatTimeShort(timing.totalElapsed)}</span>
+                      )}
                     </div>
                   </div>
 

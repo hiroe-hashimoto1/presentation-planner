@@ -10,6 +10,7 @@ interface PaneProposalProps {
   projectTitle: string;
   onProposalChange: (fields: ProposalFields) => void;
   onTitleChange: (title: string) => void;
+  readOnly?: boolean;
 }
 
 const FIELDS: { key: keyof ProposalFields; label: string; rows: number }[] = [
@@ -25,6 +26,7 @@ export function PaneProposal({
   projectTitle,
   onProposalChange,
   onTitleChange,
+  readOnly = false,
 }: PaneProposalProps) {
   const handleChange = (key: keyof ProposalFields, value: string) => {
     onProposalChange({ ...proposal, [key]: value });
@@ -38,6 +40,7 @@ export function PaneProposal({
             type="text"
             value={projectTitle}
             onChange={(e) => onTitleChange(e.target.value)}
+            readOnly={readOnly}
             className="notion-input text-base font-medium h-auto border-0 shadow-none focus-visible:ring-0"
             placeholder="企画タイトルを入力..."
           />
@@ -50,6 +53,7 @@ export function PaneProposal({
             <Textarea
               value={proposal[key]}
               onChange={(e) => handleChange(key, e.target.value)}
+              readOnly={readOnly}
               rows={rows}
               className="notion-input min-h-0 border-0 shadow-none focus-visible:ring-0 resize-none leading-relaxed"
               placeholder={`${label}を入力...`}

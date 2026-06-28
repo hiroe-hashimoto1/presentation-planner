@@ -15,6 +15,7 @@ interface PaneTocProps {
   onSelectToc: (tocId: string) => void;
   onSelectParagraph: (tocId: string, paraId: string) => void;
   onTocChange: (toc: TocItem[]) => void;
+  readOnly?: boolean;
 }
 
 function createParagraph(): Paragraph {
@@ -46,18 +47,22 @@ export function PaneToc({
   onSelectToc,
   onSelectParagraph,
   onTocChange,
+  readOnly = false,
 }: PaneTocProps) {
   const [editingTocId, setEditingTocId] = useState<string | null>(null);
 
   const addTocItem = () => {
+    if (readOnly) return;
     onTocChange([...toc, createTocItem()]);
   };
 
   const removeTocItem = (tocId: string) => {
+    if (readOnly) return;
     onTocChange(toc.filter((t) => t.id !== tocId));
   };
 
   const updateTocTitle = (tocId: string, title: string) => {
+    if (readOnly) return;
     onTocChange(toc.map((t) => (t.id === tocId ? { ...t, title } : t)));
   };
 
@@ -89,7 +94,7 @@ export function PaneToc({
                 {String(index + 1).padStart(2, "0")}
               </span>
 
-              {editingTocId === item.id ? (
+              {editingTocId === item.id && !readOnly ? (
                 <Input
                   autoFocus
                   className="flex-1 h-7 text-sm border-0 bg-secondary shadow-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -103,6 +108,7 @@ export function PaneToc({
                 <span
                   className="flex-1 text-sm truncate"
                   onDoubleClick={(e) => {
+                    if (readOnly) return;
                     e.stopPropagation();
                     setEditingTocId(item.id);
                   }}
@@ -114,6 +120,7 @@ export function PaneToc({
               <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                 {item.paragraphs.length}
               </span>
+              {!readOnly && (
               <button
                 type="button"
                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all shrink-0"
@@ -125,6 +132,7 @@ export function PaneToc({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+              )}
             </div>
 
             {selectedTocId === item.id && (
@@ -161,10 +169,12 @@ export function PaneToc({
           </div>
         ))}
 
+        {!readOnly && (
         <AddRowButton onClick={addTocItem}>
           <Plus className="h-4 w-4" />
           目次項目を追加
         </AddRowButton>
+        )}
       </div>
     </PaneShell>
   );
