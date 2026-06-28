@@ -36,7 +36,21 @@ export default function HomePage() {
   const [conflictOpen, setConflictOpen] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadInProgress = useRef(false);
+  const savingInProgress = useRef(false);
+  const conflictPaused = useRef(false);
   const pendingSaveProject = useRef<Project | null>(null);
+  const editingProjectRef = useRef<Project | null>(null);
+
+  useEffect(() => {
+    editingProjectRef.current = editingProject;
+  }, [editingProject]);
+
+  const clearAutoSaveTimer = useCallback(() => {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+  }, []);
 
   const loadProjects = useCallback(async () => {
     if (!user) return;
@@ -63,6 +77,8 @@ export default function HomePage() {
       options?: { force?: boolean }
     ): Promise<Project | null> => {
       if (!user) return null;
+      if (savingInProgress.current && !options?.force) return null;
+      savingInProgress.current = true;
       setSaving(true);
       setSaveError(null);
       try {
@@ -79,12 +95,19 @@ export default function HomePage() {
         setEditingProject((prev) =>
           prev?.id === saved.id ? saved : prev
         );
+        editingProjectRef.current =
+          editingProjectRef.current?.id === saved.id
+            ? saved
+            : editingProjectRef.current;
         setLastSavedAt(new Date());
         pendingSaveProject.current = null;
+        conflictPaused.current = false;
         return saved;
       } catch (e) {
         if (e instanceof ProjectConflictError) {
           pendingSaveProject.current = project;
+          conflictPaused.current = true;
+          clearAutoSaveTimer();
           setConflictOpen(true);
           return null;
         }
@@ -92,51 +115,69 @@ export default function HomePage() {
         pendingSaveProject.current = project;
         return null;
       } finally {
+        savingInProgress.current = false;
         setSaving(false);
       }
     },
-    [user]
+    [user, clearAutoSaveTimer]
   );
+
+  const flushAutoSave = useCallback(async () => {
+    if (
+      uploadInProgress.current ||
+      conflictPaused.current ||
+      savingInProgress.current
+    ) {
+      return;
+    }
+    const latest = editingProjectRef.current;
+    if (!latest) return;
+    await persistProject(latest);
+  }, [persistProject]);
 
   const scheduleAutoSave = useCallback(
     (project: Project) => {
-      if (uploadInProgress.current) return;
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      if (uploadInProgress.current || conflictPaused.current) return;
+      editingProjectRef.current = project;
+      clearAutoSaveTimer();
       autoSaveTimer.current = setTimeout(() => {
-        if (!uploadInProgress.current) {
-          void persistProject(project);
-        }
+        void flushAutoSave();
       }, 1500);
     },
-    [persistProject]
+    [clearAutoSaveTimer, flushAutoSave]
   );
 
   const handleUploadStateChange = useCallback(
     (uploading: boolean) => {
       uploadInProgress.current = uploading;
-      if (!uploading && editingProject) {
-        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-        void persistProject(editingProject);
+      if (!uploading) {
+        clearAutoSaveTimer();
+        void flushAutoSave();
       }
     },
-    [editingProject, persistProject]
+    [clearAutoSaveTimer, flushAutoSave]
   );
 
   const handleConflictOverwrite = useCallback(async () => {
     setConflictOpen(false);
-    const project = pendingSaveProject.current ?? editingProject;
+    conflictPaused.current = false;
+    const project = pendingSaveProject.current ?? editingProjectRef.current;
     if (!project) return;
     const saved = await persistProject(project, { force: true });
     if (saved) setEditingProject(saved);
-  }, [editingProject, persistProject]);
+  }, [persistProject]);
 
   const handleConflictReload = useCallback(async () => {
     setConflictOpen(false);
-    if (!user || !editingProject) return;
+    conflictPaused.current = false;
+    clearAutoSaveTimer();
+    const current = editingProjectRef.current;
+    if (!user || !current) return;
     try {
-      const fresh = await fetchProject(editingProject.id, user.id);
+      const fresh = await fetchProject(current.id, user.id);
       if (fresh) {
         setEditingProject(fresh);
+        editingProjectRef.current = fresh;
         setLastSavedAt(new Date(fresh.updatedAt));
         setSaveError(null);
         pendingSaveProject.current = null;
@@ -146,7 +187,7 @@ export default function HomePage() {
         e instanceof Error ? e.message : "最新データの読み込みに失敗しました"
       );
     }
-  }, [user, editingProject]);
+  }, [user, clearAutoSaveTimer]);
 
   const handleRetrySave = useCallback(async () => {
     const project = pendingSaveProject.current ?? editingProject;
@@ -157,9 +198,9 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      clearAutoSaveTimer();
     };
-  }, []);
+  }, [clearAutoSaveTimer]);
 
   if (!configured) {
     return <SupabaseSetupScreen />;
@@ -197,10 +238,12 @@ export default function HomePage() {
           lastSavedAt={lastSavedAt}
           onUploadStateChange={handleUploadStateChange}
           onBack={() => {
-            if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+            clearAutoSaveTimer();
             setEditingProject(null);
+            editingProjectRef.current = null;
             setSaveError(null);
             setConflictOpen(false);
+            conflictPaused.current = false;
             pendingSaveProject.current = null;
             void loadProjects();
           }}
@@ -307,7 +350,10 @@ export default function HomePage() {
                 <div
                   key={project.id}
                   className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
-                  onClick={() => setEditingProject(project)}
+                  onClick={() => {
+                    editingProjectRef.current = project;
+                    setEditingProject(project);
+                  }}
                 >
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
