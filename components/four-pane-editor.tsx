@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ArrowLeft, FileDown, Play, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2, Play, Presentation, RefreshCw, Save } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import type { Project, TocItem, Slide } from "@/lib/types";
 import { resetAllElapsed } from "@/lib/rehearsal";
+import { exportProject, type ExportFormat } from "@/lib/export";
 import { PaneProposal } from "./pane-proposal";
 import { PaneToc } from "./pane-toc";
 import { PaneScript } from "./pane-script";
@@ -59,6 +60,8 @@ export function FourPaneEditor({
   );
   const [rehearsalActive, setRehearsalActive] = useState(false);
   const [startingRehearsal, setStartingRehearsal] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const selectedTocItem = project.toc.find((t) => t.id === selectedTocId) ?? null;
   const selectedParagraph =
@@ -134,6 +137,24 @@ export function FourPaneEditor({
     onRehearsalActiveChange?.(false);
   }, [onRehearsalActiveChange]);
 
+  const handleExport = useCallback(
+    async (format: ExportFormat) => {
+      if (exporting || rehearsalActive) return;
+      setExportError(null);
+      setExporting(format);
+      try {
+        await exportProject(project, format);
+      } catch (e) {
+        setExportError(
+          e instanceof Error ? e.message : "エクスポートに失敗しました"
+        );
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exporting, rehearsalActive, project]
+  );
+
   const readOnly = rehearsalActive;
 
   return (
@@ -200,15 +221,43 @@ export function FourPaneEditor({
             <Play className="h-3.5 w-3.5" />
             {startingRehearsal ? "準備中…" : "リハーサル"}
           </Button>
+          {exportError && !rehearsalActive && (
+            <span
+              className="text-xs text-destructive max-w-[120px] truncate hidden lg:inline"
+              title={exportError}
+            >
+              {exportError}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
-            disabled
-            className="hidden md:inline-flex opacity-50 border-dashed"
-            title="フェーズ4で実装予定"
+            className="hidden md:inline-flex"
+            onClick={() => void handleExport("pdf")}
+            disabled={Boolean(exporting) || rehearsalActive || saving}
+            title="PDFをダウンロード"
           >
-            <FileDown className="h-3.5 w-3.5" />
+            {exporting === "pdf" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileDown className="h-3.5 w-3.5" />
+            )}
             PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => void handleExport("pptx")}
+            disabled={Boolean(exporting) || rehearsalActive || saving}
+            title="PowerPointをダウンロード"
+          >
+            {exporting === "pptx" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Presentation className="h-3.5 w-3.5" />
+            )}
+            PPT
           </Button>
           <Button
             size="sm"

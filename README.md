@@ -88,4 +88,4 @@ npm run deploy:surge
 | 1 | 認証・DB永続化 | 実装済 |
 | 2 | スライドテンプレート・画像（Storage 永続化） | 実装済 |
 | 3 | タイマー・リハーサルモード | 実装済 |
-| 4 | PDF / PowerPoint 出力 | 未 |
+| 4 | PDF / PowerPoint 出力 | 実装済 |
