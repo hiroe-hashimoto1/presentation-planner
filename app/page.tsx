@@ -136,9 +136,8 @@ export default function HomePage() {
   }, [persistProject]);
 
   const scheduleAutoSave = useCallback(
-    (project: Project) => {
+    (_project: Project) => {
       if (uploadInProgress.current || conflictPaused.current) return;
-      editingProjectRef.current = project;
       clearAutoSaveTimer();
       autoSaveTimer.current = setTimeout(() => {
         void flushAutoSave();
@@ -226,6 +225,7 @@ export default function HomePage() {
           userId={user.id}
           onProjectChange={(updated) => {
             setEditingProject(updated);
+            editingProjectRef.current = updated;
             scheduleAutoSave(updated);
           }}
           onSave={async () => {

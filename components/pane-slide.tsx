@@ -255,7 +255,6 @@ export function PaneSlide({
         await removeOldStorageImage(oldPath);
       }
 
-      clearLocalPreview();
       onSlideChange({
         ...slide,
         imageUrl: path,
@@ -267,8 +266,9 @@ export function PaneSlide({
       );
     } finally {
       setUploading(false);
-      onUploadStateChange?.(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
+      // onSlideChange の後に保存を走らせる（同期的に ref 更新済みの状態で flush）
+      onUploadStateChange?.(false);
     }
   };
 

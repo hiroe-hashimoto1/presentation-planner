@@ -54,10 +54,14 @@ export function validateImageFile(file: File): ImageValidationResult {
       file.type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]
     )
   ) {
-    return {
-      ok: false,
-      message: "PNG、JPEG、WebP のみ対応しています（HEIC は未対応です）",
-    };
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const allowedExt = ["png", "jpg", "jpeg", "webp"];
+    if (!ext || !allowedExt.includes(ext)) {
+      return {
+        ok: false,
+        message: "PNG、JPEG、WebP のみ対応しています（HEIC は未対応です）",
+      };
+    }
   }
 
   if (file.size > MAX_IMAGE_SIZE_BYTES) {

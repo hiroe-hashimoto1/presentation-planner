@@ -74,7 +74,9 @@ export function SlideImage({
     return null;
   }
 
-  if (uploading || loading) {
+  const showSpinner = uploading || (loading && !localPreview);
+
+  if (showSpinner) {
     return (
       <div
         className={cn(
